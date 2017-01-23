@@ -1,0 +1,245 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+
+var app = require('../app');
+var debug = require('debug')('camera:server');
+var http = require('http');
+var spawn = require('child_process').spawn;
+var isJpg = require('is-jpg');
+var camera = require('../controllers/camera');
+
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.PORT || '3000');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+
+var server = http.createServer(app);
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+
+server.listen(port);
+server.on('error', onError);
+server.on('listening', onListening);
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string'
+    ? 'Pipe ' + port
+    : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
+
+// Socket IO
+var io = require('socket.io')(server);
+var stream = null;
+
+var clients = [];
+var client_management = {};
+
+io.on('connection', function(client){
+  clients.push(client.id);
+  client_management[client.id] = {};
+  console.log('Client with ID: ' + client.id + ' connected.');
+  console.log(clients.length + ' clients currently connected.');
+
+  client.on('event', function(data){});
+
+  client.on('disconnect', function(){
+    for(var i=0; i<clients.length; i++){
+      if(clients[i] === client.id){
+        clients.splice(i, 1);
+      }
+      client_management[client.id] = null;
+    }
+    if(clients.length === 0 && stream){
+      stopStream();
+    }
+  });
+
+  client.on('stream:start', function(){
+    client_management[client.id].stream = true;
+    if(!stream){
+      startStream();
+    }
+  });
+  client.on('stream:stop', function(){
+    client_management[client.id].stream = false;
+  });
+
+});
+
+var c = 0;
+var buffs = [];
+
+var startStream = function(){
+  stream = spawn('gphoto2', ['--capture-movie', '--stdout']);
+  console.log('Stream started');
+  stream.stdout.on('error', function(data){
+    console.log(data);
+  });
+
+  stream.stdout.on('data', function(data){
+    if(isJpg(data)){
+      var b = Buffer.concat(buffs);
+      var b64 = base64ArrayBuffer(b);
+      var nostreamers = true;
+      for(var i=0; i<clients.length; i++){
+        if(client_management[clients[i]].stream){
+          io.sockets.connected[clients[i]].emit('stream', b64);
+          nostreamers = false;
+        }
+      }
+      if(nostreamers){
+        stopStream();
+      }
+      buffs = [];
+      buffs.push(data);
+    }
+    else{
+      buffs.push(data);
+    }
+  });
+
+  stream.on('close', function(data){
+    console.log('Stream stopped prematurely.');
+    stopStream();
+  })
+};
+
+var stopStream = function(){
+  if(stream){
+    console.log('Stream stopped');
+    stream.stdin.pause();
+    stream.kill();
+    stream = null;
+  }
+};
+
+function base64ArrayBuffer(arrayBuffer) {
+  var base64    = ''
+  var encodings = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+
+  var bytes         = new Uint8Array(arrayBuffer)
+  var byteLength    = bytes.byteLength
+  var byteRemainder = byteLength % 3
+  var mainLength    = byteLength - byteRemainder
+
+  var a, b, c, d
+  var chunk
+
+  // Main loop deals with bytes in chunks of 3
+  for (var i = 0; i < mainLength; i = i + 3) {
+    // Combine the three bytes into a single integer
+    chunk = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2]
+
+    // Use bitmasks to extract 6-bit segments from the triplet
+    a = (chunk & 16515072) >> 18 // 16515072 = (2^6 - 1) << 18
+    b = (chunk & 258048)   >> 12 // 258048   = (2^6 - 1) << 12
+    c = (chunk & 4032)     >>  6 // 4032     = (2^6 - 1) << 6
+    d = chunk & 63               // 63       = 2^6 - 1
+
+    // Convert the raw binary segments to the appropriate ASCII encoding
+    base64 += encodings[a] + encodings[b] + encodings[c] + encodings[d]
+  }
+
+  // Deal with the remaining bytes and padding
+  if (byteRemainder == 1) {
+    chunk = bytes[mainLength]
+
+    a = (chunk & 252) >> 2 // 252 = (2^6 - 1) << 2
+
+    // Set the 4 least significant bits to zero
+    b = (chunk & 3)   << 4 // 3   = 2^2 - 1
+
+    base64 += encodings[a] + encodings[b] + '=='
+  } else if (byteRemainder == 2) {
+    chunk = (bytes[mainLength] << 8) | bytes[mainLength + 1]
+
+    a = (chunk & 64512) >> 10 // 64512 = (2^6 - 1) << 10
+    b = (chunk & 1008)  >>  4 // 1008  = (2^6 - 1) << 4
+
+    // Set the 2 least significant bits to zero
+    c = (chunk & 15)    <<  2 // 15    = 2^4 - 1
+
+    base64 += encodings[a] + encodings[b] + encodings[c] + '='
+  }
+  
+  return base64
+}
+
+
+var camera_info = {
+  model: {
+    path: '/main/status/model',
+    value: null
+  },
+  manufacturer: {
+    path: '/main/status/manufacturer',
+    value: null
+  }
+}
+
+camera.getInfo(camera_info.model.path);
