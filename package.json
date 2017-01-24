@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "body-parser": "~1.15.2",
+    "child-process-promise": "^2.2.0",
     "cookie-parser": "~1.4.3",
     "debug": "~2.2.0",
     "express": "~4.14.0",
@@ -14,6 +15,8 @@
     "jade": "~1.11.0",
     "mjpeg2jpegs": "^1.0.6",
     "morgan": "~1.7.0",
+    "promise": "^7.1.1",
+    "q": "^1.4.1",
     "serve-favicon": "~2.3.0",
     "socket.io": "^1.7.2"
   }

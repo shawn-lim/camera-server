@@ -1,13 +1,120 @@
-var exec = require('child_process').exec;
+var exec = require('child-process-promise').exec;
+var spawn = require('child_process').spawn;
+var isJpg = require('is-jpg');
+var q = require('q');
 
 var stream;
+var camera_info = {
+  model: {
+    path: 'cameramodel',
+    value: null
+  },
+  manufacturer: {
+    path: 'manufacturer',
+    value: null
+  }
+};
+var streamers = {};
 
 exports.getInfo = function(path){
-  var cmd = exec('gphoto2 --get-config='+path, function(err, stdout, stderr){
-    console.log(stdout);
-  });
-}
-exports.startStream = function(){
+  var deferred = q.defer();
+  exec('gphoto2 --get-config '+path)
+    .then(function(result){
+      deferred.resolve(parseInfo(result.stdout));
+    })
+    .catch(function(err){
+      console.log('ERROR: '+err);
+      deferred.reject(parseInfo(result.stdout));
+    });
+  return deferred.promise;
+};
+
+exports.startStream = function(io, cid){
+  startStream(io, cid);
+};
+
+exports.stopStream = function(cid){
+  stopStream(cid);
+};
+// Starts streaming
+var startStream = function(io, clientid){
+
+  streamers[clientid] = true;
+
+  // Only run this code if the stream is not yet initiated
+  if(!stream){
+    stream = spawn('gphoto2', ['--capture-movie', '--stdout']);
+    console.log('Stream started.');
+
+    stream.stdout.on('error', function(data){
+      console.log(data);
+    });
+
+    // On data,do stream
+    var buffs = [];
+    stream.stdout.on('data', function(data){
+      /*
+       * The frames comes in chunks.
+       * The isJpg function checks the first 3 bytes of the array
+       * to figure out if the current arraybuffer is the start of a new frame.
+       * If so, we concat the previous buffers into 1 image and send it through
+       * the socket to all listening clients who's status is 'streaming'
+       */
+      if(isJpg(data)){
+        var b = Buffer.concat(buffs);
+        var b64 = base64ArrayBuffer(b);
+
+        var clients = Object.keys(streamers);
+        for(var i=0; i<clients.length; i++){
+          io.sockets.connected[clients[i]].emit('liveview', b64);
+        }
+        buffs = [];
+        buffs.push(data);
+      }
+      // Not a new frame, lets push to the buffer
+      else{
+        buffs.push(data);
+      }
+    });
+
+    stream.on('close', function(data){
+      console.log('Stream stopped.');
+    })
+  }
+};
+
+var stopStream = function(clientid){
+  delete streamers[clientid];
+  if(JSON.stringify(streamers).length === 2){
+    console.log('No on listening...');
+    if(stream){
+      console.log('Stopping stream...');
+      stream.stdin.pause();
+      stream.kill();
+      stream = null;
+    }
+  }
+};
+// String -> Key Value pairmap
+function parseInfo(string){
+  var keyvals = {};
+  var tmp = string.split('\n');
+  var choices = [];
+  for(var i=0; i<tmp.length; i++){
+    var keyval = tmp[i].split(':');
+    if(keyval.length > 1){
+      if(keyval[0].trim() === 'Choice'){
+        choices.push(keyval[1].trim().split(' ')[1].trim());
+      }
+      else{
+        keyvals[keyval[0].trim()] = keyval[1].trim();
+      }
+    }
+  }
+  if(choices.length > 0){
+    keyvals['choices'] = choices;
+  }
+  return keyvals;
 };
 
 // Array buffer -> Base64 converter
@@ -59,6 +166,6 @@ function base64ArrayBuffer(arrayBuffer) {
 
     base64 += encodings[a] + encodings[b] + encodings[c] + '='
   }
-  
+
   return base64
-}
+};
