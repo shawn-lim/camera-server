@@ -36,6 +36,13 @@ exports.startStream = function(io, cid){
 exports.stopStream = function(cid){
   stopStream(cid);
 };
+
+exports.shoot = function(){
+  var cmd = spawn('gphoto2', ['--capture-image-and-download']);
+  cmd.on('close', function(res){
+
+  });
+};
 // Starts streaming
 var startStream = function(io, clientid){
 
