@@ -28,7 +28,8 @@ module.exports.listen = function(app){
     client.on('liveview:stop', function(){
       camera.stopStream(client.id);
     });
-    client.on('camera:shoot', function(){
+    client.on('camera:shoot', function(data){
+      console.log(data);
       camera.shoot();
     })
   });
@@ -36,7 +37,7 @@ module.exports.listen = function(app){
   return io;
 };
 
-var removeClient = function(clientid){
+function removeClient(clientid){
   delete clients[clientid];
   camera.stopStream(clientid);
 };

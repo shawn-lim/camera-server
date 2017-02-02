@@ -24,8 +24,21 @@ exports.getInfo = function(path){
     })
     .catch(function(err){
       console.log('ERROR: '+err);
-      deferred.reject(parseInfo(result.stdout));
+      deferred.reject(err);
     });
+  return deferred.promise;
+};
+
+exports.getSummary = function(){
+  var deferred = q.defer();
+  exec('gphoto2 --summary')
+    .then(function(res){
+      deferred.resolve(parseInfo(result.stdout));
+    })
+  .catch(function(err){
+    console.log('ERROR: '+err);
+    deferred.reject(err);
+  });
   return deferred.promise;
 };
 
@@ -44,7 +57,7 @@ exports.shoot = function(){
   });
 };
 // Starts streaming
-var startStream = function(io, clientid){
+function startStream(io, clientid){
 
   streamers[clientid] = true;
 
@@ -90,7 +103,7 @@ var startStream = function(io, clientid){
   }
 };
 
-var stopStream = function(clientid){
+function stopStream(clientid){
   delete streamers[clientid];
   if(JSON.stringify(streamers).length === 2){
     console.log('No on listening...');
@@ -102,6 +115,19 @@ var stopStream = function(clientid){
     }
   }
 };
+
+/*
+ * Sends the camera information to a list of clients
+ */
+function broadcastCameraInfo(cids){
+  
+};
+
+/*
+ * PARAMS: String response from gphoto2
+ * RETURNS: Key-Value map
+ */
+
 // String -> Key Value pairmap
 function parseInfo(string){
   var keyvals = {};
