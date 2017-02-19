@@ -1,13 +1,18 @@
-
 function Database(){
+    this.name = "this is a name";
 
+    function defaultBehavior(){
+        throw "Function not implemented";
+    }
+
+    var images = {};
+
+    images.create= defaultBehavior;
+    images.find = defaultBehavior;
+
+    return {
+        images: images
+    };
 }
-
-function defaultBehavior(){
-    throw "Function not implemented";
-}
-
-Database.prototype.images.create = defaultBehavior;
-Database.prototype.images.find = defaultBehavior;
 
 module.exports = Database;
