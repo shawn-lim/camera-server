@@ -26,13 +26,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 
 app.use(function(req, res, next){
-  MongoClient.connect('mongodb:localhost:27017/camera_server', function(err, db){
+  MongoClient.connect('mongodb://localhost:27017/camera_server', function(err, db){
     if (err) {throw err;}
     req.db = db;
     next();
   });
 
-})
+});
+
 app.use('/', index);
 app.use('/users', users);
 
