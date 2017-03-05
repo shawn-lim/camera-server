@@ -7,19 +7,6 @@ router.get('/', function(req, res, next) {
 });
 
 
-router.get('/images', function(req, res, next){
-  var result = req.db.collection('images').find().toArray(function(result, err){
-    if (err) {
-      res.send(err);
-      throw err;
-    }
-    res.send(result);
-  });
-});
 
-router.post('/images', function(req, res, next){
-  req.db.collection('images').insertOne(req.body);
-  res.send(200);
-});
 
 module.exports = router;
