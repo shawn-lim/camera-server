@@ -8,13 +8,17 @@ var loadImage = function(req, res, next){
 }
 
 router.get('/', function(req, res, next){
-  var result = req.db.collection('images').find().toArray(function(res, err){
-    if (err) {
-      throw err;
-    }
-    res.send(result);
-  });
+  var result = req.db.collection('images').find().toArray();//function(err, result){
+    // if (err) {
+    //   console.log("result" + result);
+    //   console.log(err);
+    //   throw err;
+    // }
+    // res.write(result);
+  // });
+  res.write(result);
 });
+
 
 router.get('/:id', loadImage, function(req,res,next){
   res.send(req.image);
@@ -23,8 +27,10 @@ router.get('/:id', loadImage, function(req,res,next){
 router.post('/', function(req, res, next){
   var image = {};
   image.url = req.body.url;
-  req.db.collection('images').insertOne(image);
-  res.send(200);
+  req.db.collection('images').insertOne(image, function(err, inserted){
+    res.send(inserted);
+  });
+  
 });
 
 

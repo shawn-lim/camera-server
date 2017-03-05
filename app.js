@@ -7,7 +7,7 @@ var bodyParser = require('body-parser');
 
 var index = require('./routes/index');
 var users = require('./routes/users');
-var images = require('./routes/images.js')
+var images = require('./routes/images.js');
 
 var app = express();
 
@@ -28,8 +28,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(function(req, res, next){
   MongoClient.connect('mongodb://localhost:27017/camera_server', function(err, db){
-    if (err) {throw err;}
+    if (err) {
+      console.log(err);
+      throw err;
+    }
     req.db = db;
+    console.log("next it says");
     next();
   });
 
